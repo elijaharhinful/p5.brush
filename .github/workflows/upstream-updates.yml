@@ -19,6 +19,7 @@ jobs:
     runs-on: ubuntu-latest
     env:
       UPSTREAM: acamposuribe/p5.brush
+      HOWTO: 'doc-to-explainer-video does not install this fork: it carries its own frozen copy of dist/brush.js in templates/film/lib/. To adopt these changes, follow templates/film/lib/README.md (copy dist/brush.js and both docs from this branch), run `sh <doc-to-explainer-video skill>/templates/tools/selftest.sh`, and merge here only once the plugin has the new copy.'
       GH_TOKEN: ${{ github.token }}
       GH_REPO: ${{ github.repository }}   # in a fork, gh would otherwise aim at the original repo
     steps:
@@ -63,21 +64,18 @@ jobs:
           {
             echo "**${{ steps.cmp.outputs.new }} new commit(s)** in [$UPSTREAM](https://github.com/$UPSTREAM) since this fork's main, up to \`${{ steps.cmp.outputs.head }}\`."
             echo
-            echo "Before merging, test them with doc-to-explainer-video:"
-            echo
-            echo '```'
-            echo "sh <doc-to-explainer-video skill>/templates/tools/selftest.sh --branch $B"
-            echo '```'
+            printf '%s
+' "$HOWTO"
             echo
             echo "Merge only if it passes. Until then nothing changes for you or your colleagues."
             [ -f github-note.txt ] && { echo; echo "Changes to the original's \`.github\` folder (its own CI and publishing) are left out: they're disabled in this fork."; }
             echo
             echo "### Commits"
-            git log --no-merges --format='- `%h` %s (%an, %as)' HEAD..upstream/main | head -150
+            git log --no-merges --format='- `%h` %s (%an, %as)' origin/main..upstream/main | head -150
             echo
             echo "### Files changed"
             echo '```'
-            git diff --stat HEAD...upstream/main | tail -60
+            git diff --stat origin/main HEAD | tail -60
             echo '```'
           } > body.md
           if [ -n "$CONFLICT" ]; then
