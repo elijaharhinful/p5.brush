@@ -55,6 +55,11 @@ jobs:
           if ! git merge --no-ff --no-edit -m "Bring in upstream changes up to ${{ steps.cmp.outputs.head }}" upstream/main; then
             git merge --abort; CONFLICT=1
           fi
+          if [ -z "$CONFLICT" ] && ! git diff --quiet origin/main HEAD -- .github; then
+            # keep this fork's own .github (its workflows); the original's are disabled here and this job may not push them
+            git rm -rq .github && git checkout origin/main -- .github && git commit -q --amend --no-edit
+            echo ".github left as this fork has it" > github-note.txt
+          fi
           {
             echo "**${{ steps.cmp.outputs.new }} new commit(s)** in [$UPSTREAM](https://github.com/$UPSTREAM) since this fork's main, up to \`${{ steps.cmp.outputs.head }}\`."
             echo
@@ -65,6 +70,7 @@ jobs:
             echo '```'
             echo
             echo "Merge only if it passes. Until then nothing changes for you or your colleagues."
+            [ -f github-note.txt ] && { echo; echo "Changes to the original's \`.github\` folder (its own CI and publishing) are left out: they're disabled in this fork."; }
             echo
             echo "### Commits"
             git log --no-merges --format='- `%h` %s (%an, %as)' HEAD..upstream/main | head -150
