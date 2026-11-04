@@ -20,6 +20,7 @@ jobs:
     env:
       UPSTREAM: acamposuribe/p5.brush
       GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}   # in a fork, gh would otherwise aim at the original repo
     steps:
       - uses: actions/checkout@v4
         with:
