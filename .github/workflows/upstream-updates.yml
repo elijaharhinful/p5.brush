@@ -1,0 +1,92 @@
+# Weekly check for changes in the original project. Never merges anything by itself:
+# it opens (or refreshes) a pull request into this fork's main, so the owner can read the changes,
+# run doc-to-explainer-video's tools/selftest.sh against them, and merge only if it passes.
+# main in this fork is the version doc-to-explainer-video trusts; setup always installs main.
+name: Upstream updates
+
+on:
+  schedule:
+    - cron: '0 6 * * 1'   # Mondays 06:00 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    env:
+      UPSTREAM: acamposuribe/p5.brush
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Compare with the original
+        id: cmp
+        run: |
+          git remote add upstream "https://github.com/$UPSTREAM.git"
+          if ! git fetch --quiet upstream main; then
+            echo "gone=1" >> "$GITHUB_OUTPUT"; exit 0
+          fi
+          N=$(git rev-list --count HEAD..upstream/main)
+          echo "new=$N" >> "$GITHUB_OUTPUT"
+          echo "head=$(git rev-parse --short upstream/main)" >> "$GITHUB_OUTPUT"
+
+      - name: The original can't be reached
+        if: steps.cmp.outputs.gone == '1'
+        run: |
+          T="The original project ($UPSTREAM) can't be reached"
+          gh issue list --state open --search "in:title \"$T\"" --json number -q '.[0].number' | grep -q . && exit 0
+          gh issue create --title "$T" --body "This week's check couldn't fetch https://github.com/$UPSTREAM. It may have been deleted, renamed or made private. Nothing is affected: this fork's main still holds the version doc-to-explainer-video uses, and setup keeps installing it."
+
+      - name: Open or refresh the update pull request
+        if: steps.cmp.outputs.new != '' && steps.cmp.outputs.new != '0'
+        run: |
+          git config user.name "upstream-updates"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          B=upstream-updates
+          git checkout -B $B origin/main
+          CONFLICT=""
+          if ! git merge --no-ff --no-edit -m "Bring in upstream changes up to ${{ steps.cmp.outputs.head }}" upstream/main; then
+            git merge --abort; CONFLICT=1
+          fi
+          {
+            echo "**${{ steps.cmp.outputs.new }} new commit(s)** in [$UPSTREAM](https://github.com/$UPSTREAM) since this fork's main, up to \`${{ steps.cmp.outputs.head }}\`."
+            echo
+            echo "Before merging, test them with doc-to-explainer-video:"
+            echo
+            echo '```'
+            echo "sh <doc-to-explainer-video skill>/templates/tools/selftest.sh --branch $B"
+            echo '```'
+            echo
+            echo "Merge only if it passes. Until then nothing changes for you or your colleagues."
+            echo
+            echo "### Commits"
+            git log --no-merges --format='- `%h` %s (%an, %as)' HEAD..upstream/main | head -150
+            echo
+            echo "### Files changed"
+            echo '```'
+            git diff --stat HEAD...upstream/main | tail -60
+            echo '```'
+          } > body.md
+          if [ -n "$CONFLICT" ]; then
+            printf '\n> **These changes clash with edits made in this fork.** Resolve them by hand: `git fetch https://github.com/%s main` and merge into main locally.\n' "$UPSTREAM" >> body.md
+            T="Upstream changes need a manual merge"
+            gh issue list --state open --search "in:title \"$T\"" --json number -q '.[0].number' | grep -q . || gh issue create --title "$T" --body-file body.md
+            exit 0
+          fi
+          if ! git push --force --quiet origin $B; then
+            # GitHub won't let this job push changes to workflow files; say so instead of failing quietly
+            T="Upstream changes are ready but must be synced by hand"
+            printf '\n> The changes touch GitHub workflow files, which this job is not allowed to push. Use **Sync fork** on GitHub, or merge upstream locally, then run the self-test.\n' >> body.md
+            gh issue list --state open --search "in:title \"$T\"" --json number -q '.[0].number' | grep -q . || gh issue create --title "$T" --body-file body.md
+            exit 0
+          fi
+          PR=$(gh pr list --head $B --state open --json number -q '.[0].number')
+          if [ -n "$PR" ]; then gh pr edit "$PR" --body-file body.md
+          else gh pr create --base main --head $B --title "Upstream updates: review and self-test before merging" --body-file body.md
+          fi
