@@ -64,8 +64,7 @@ jobs:
           {
             echo "**${{ steps.cmp.outputs.new }} new commit(s)** in [$UPSTREAM](https://github.com/$UPSTREAM) since this fork's main, up to \`${{ steps.cmp.outputs.head }}\`."
             echo
-            printf '%s
-' "$HOWTO"
+            echo "$HOWTO"
             echo
             echo "Merge only if it passes. Until then nothing changes for you or your colleagues."
             [ -f github-note.txt ] && { echo; echo "Changes to the original's \`.github\` folder (its own CI and publishing) are left out: they're disabled in this fork."; }
