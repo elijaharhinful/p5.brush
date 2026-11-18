@@ -384,6 +384,10 @@ export const flushActiveComposite = () => {
   Mix.cachedColor = null;
 };
 
+/** The offscreen target passed to the last load() (false = main canvas). */
+let activeLoadTarget = false;
+export const getLoadTarget = () => activeLoadTarget;
+
 /**
  * Loads and initializes the drawing target, then refreshes compositing
  * resources if the renderer was already active.
@@ -391,6 +395,12 @@ export const flushActiveComposite = () => {
  * @param {object|false} [buffer=false] - Optional offscreen target.
  */
 export const load = (buffer = false) => {
+  // Flush pending stroke/wash composites into the target being left, as the
+  // standalone adapter already does (adapters/standalone/target.js). Without
+  // this, p5-build work queued on a p5.Graphics/Framebuffer is composited into
+  // whatever target is active at the next flush (usually the main canvas).
+  if (Renderer?.loaded) flushActiveComposite();
+  activeLoadTarget = buffer || false;
   loadTarget(buffer);
   if (Renderer.loaded) Mix.load();
 };
